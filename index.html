@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" data-layer="loading">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<main class="shell">
+
+  <header class="masthead">
+    <span class="wordmark">Layer Up</span>
+    <button class="place" id="place-button" type="button">
+      <span id="place-name">Set location</span>
+    </button>
+  </header>
+
+  <section class="verdict" id="verdict" hidden>
+    <p class="scope" id="scope">Today</p>
+    <h1 class="headline" id="headline"></h1>
+    <p class="reason" id="reason"></p>
+  </section>
+
+  <section class="state" id="state">
+    <p id="state-text">Loading your forecast.</p>
+  </section>
+
+  <section class="ribbon" id="ribbon" hidden>
+    <div class="ribbon-head">
+      <h2>Your lines against the day</h2>
+      <span class="mono" id="ribbon-window"></span>
+    </div>
+    <div class="chart-wrap">
+      <svg id="chart" viewBox="0 0 900 340" role="img" aria-labelledby="chart-title"></svg>
+      <p class="sr-only" id="chart-title"></p>
+    </div>
+    <p class="legend mono">
+      <span class="key key-feels"></span>Feels like
+      <span class="key key-air"></span>Air temp
+      <span class="key key-rain"></span>Chance of rain
+    </p>
+  </section>
+
+  <section class="panel" id="panel">
+    <button class="panel-toggle" id="panel-toggle" type="button" aria-expanded="false">
+      Your thresholds
+    </button>
+
+    <div class="panel-body" id="panel-body" hidden>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Jacket at or below</span>
+          <span class="field-input">
+            <input type="number" id="jacket_f" min="-60" max="120" step="1">
+            <span class="unit mono">&deg;F</span>
+          </span>
+        </label>
+        <label class="field">
+          <span class="field-label">Coat at or below</span>
+          <span class="field-input">
+            <input type="number" id="coat_f" min="-60" max="120" step="1">
+            <span class="unit mono">&deg;F</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Call it rain at</span>
+          <span class="field-input">
+            <input type="number" id="rain_probability_pct" min="0" max="100" step="5">
+            <span class="unit mono">%</span>
+          </span>
+        </label>
+        <label class="field">
+          <span class="field-label">Out from</span>
+          <span class="field-input">
+            <input type="number" id="day_start_hour" min="0" max="23" step="1">
+            <span class="unit mono">:00</span>
+          </span>
+        </label>
+        <label class="field">
+          <span class="field-label">Back by</span>
+          <span class="field-input">
+            <input type="number" id="day_end_hour" min="1" max="24" step="1">
+            <span class="unit mono">:00</span>
+          </span>
+        </label>
+      </div>
+
+      <p class="note">
+        Readings use apparent temperature, so wind and humidity are already counted.
+        The verdict comes from the coldest hour you are actually outside.
+      </p>
+
+      <div class="panel-actions">
+        <button class="btn" id="save-settings" type="button">Save thresholds</button>
+        <span class="status mono" id="settings-status"></span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Choose location">
+    <div class="sheet-head">
+      <h2>Where are you?</h2>
+      <button class="close" id="sheet-close" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <button class="btn btn-wide" id="use-device" type="button">Use my current location</button>
+
+    <p class="divider mono">or search</p>
+
+    <div class="search-row">
+      <input type="text" id="search-input" placeholder="City or town" autocomplete="off">
+      <button class="btn" id="search-go" type="button">Search</button>
+    </div>
+
+    <ul class="results" id="results"></ul>
+    <p class="status mono" id="sheet-status"></p>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
