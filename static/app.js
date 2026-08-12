@@ -8,7 +8,37 @@ const SETTING_FIELDS = [
   "day_end_hour",
 ];
 
-let settings = null;
+const STORAGE_KEY = "layers.settings";
+
+const DEFAULTS = {
+  jacket_f: 60,
+  coat_f: 40,
+  rain_probability_pct: 40,
+  day_start_hour: 7,
+  day_end_hour: 21,
+  location: null,
+};
+
+let settings = { ...DEFAULTS };
+
+function readSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
+  } catch (err) {
+    return { ...DEFAULTS };
+  }
+}
+
+function writeSettings(next) {
+  settings = next;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch (err) {
+    // Private browsing can refuse storage. The session still works, it just
+    // will not be remembered next visit.
+  }
+}
 
 /* ------------------------------------------------------------ helpers */
 
@@ -208,11 +238,21 @@ function render(data) {
   drawChart(data);
 }
 
-async function loadForecast(coords) {
-  const query = coords ? `?lat=${coords.lat}&lon=${coords.lon}` : "";
+async function loadForecast() {
+  if (!settings.location) {
+    showState("Pick a location to get started.");
+    openSheet();
+    return;
+  }
+  const params = new URLSearchParams({
+    lat: settings.location.latitude,
+    lon: settings.location.longitude,
+    name: settings.location.name,
+  });
+  SETTING_FIELDS.forEach((field) => params.set(field, settings[field]));
   showState("Reading the forecast.");
   try {
-    render(await api(`/api/forecast${query}`));
+    render(await api(`/api/forecast?${params}`));
   } catch (err) {
     if (err.status === 409) {
       showState("Pick a location to get started.");
@@ -236,18 +276,26 @@ async function saveSettings() {
   SETTING_FIELDS.forEach((field) => {
     payload[field] = $(field).value;
   });
-  $("settings-status").textContent = "Saving";
-  try {
-    settings = await api("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    $("settings-status").textContent = "Saved";
-    await loadForecast();
-  } catch (err) {
-    $("settings-status").textContent = err.message;
+  const next = { ...settings, ...payload };
+  for (const field of SETTING_FIELDS) {
+    const value = Number(next[field]);
+    if (!Number.isInteger(value)) {
+      $("settings-status").textContent = "Every box needs a whole number";
+      return;
+    }
+    next[field] = value;
   }
+  if (next.coat_f >= next.jacket_f) {
+    $("settings-status").textContent = "Coat temperature must be below jacket";
+    return;
+  }
+  if (next.day_end_hour <= next.day_start_hour) {
+    $("settings-status").textContent = "Back by must be later than out from";
+    return;
+  }
+  writeSettings(next);
+  $("settings-status").textContent = "Saved";
+  await loadForecast();
 }
 
 /* ------------------------------------------------------------ location */
@@ -264,18 +312,16 @@ function closeSheet() {
 }
 
 async function commitLocation(location) {
-  $("sheet-status").textContent = "Saving location";
-  try {
-    settings = await api("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ location }),
-    });
-    closeSheet();
-    await loadForecast();
-  } catch (err) {
-    $("sheet-status").textContent = err.message;
-  }
+  writeSettings({
+    ...settings,
+    location: {
+      name: String(location.name).slice(0, 120),
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+    },
+  });
+  closeSheet();
+  await loadForecast();
 }
 
 function useDeviceLocation() {
@@ -355,17 +401,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 (async function start() {
-  try {
-    settings = await api("/api/settings");
-  } catch (err) {
-    showState("Could not load your settings.");
-    return;
-  }
+  settings = readSettings();
   fillSettingsForm();
-  if (!settings.location) {
-    showState("Pick a location to get started.");
-    openSheet();
-    return;
-  }
   await loadForecast();
 })();
