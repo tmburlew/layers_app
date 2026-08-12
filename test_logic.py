@@ -34,7 +34,7 @@ def payload(day, temps, feels, probs, current_hour):
 
 
 DAY = datetime(2026, 8, 12).date()
-SETTINGS = dict(layerup.DEFAULT_SETTINGS, location={"name": "x", "latitude": 0, "longitude": 0})
+SETTINGS = dict(layerup.DEFAULT_SETTINGS)
 
 
 def case(name, feels, probs, current_hour=5, settings=SETTINGS):
@@ -87,21 +87,22 @@ assert not rolled and min(r["hour"] for r in rows) == 15
 
 print("\nvalidation:")
 for bad, why in [
-    ({"coat_f": 70}, "coat above jacket"),
-    ({"day_end_hour": 5}, "end before start"),
+    ({"coat_f": "70"}, "coat above jacket"),
+    ({"day_end_hour": "5"}, "end before start"),
     ({"jacket_f": "warm"}, "non-numeric"),
-    ({"rain_probability_pct": 150}, "out of range"),
-    ({"location": {"name": "x", "latitude": 200, "longitude": 0}}, "bad latitude"),
+    ({"rain_probability_pct": "150"}, "out of range"),
 ]:
     try:
-        layerup.coerce_settings(bad, SETTINGS)
+        layerup.settings_from_args(bad)
     except ValueError as err:
         print(f"  rejected {why:20} -> {err}")
     else:
         raise AssertionError(f"should have rejected {why}")
 
-good = layerup.coerce_settings({"jacket_f": "58", "day_start_hour": 6}, SETTINGS)
+good = layerup.settings_from_args({"jacket_f": "58", "day_start_hour": "6"})
 assert good["jacket_f"] == 58 and good["day_start_hour"] == 6 and good["coat_f"] == 40
 print("  accepted valid partial update")
+assert layerup.settings_from_args({}) == layerup.DEFAULT_SETTINGS
+print("  empty query falls back to defaults")
 
 print("\nall logic checks passed")
