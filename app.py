@@ -1,19 +1,18 @@
-"""Layer Up - a local dashboard that tells you what to wear, using your own
+"""Layers - a dashboard that tells you what to wear, using your own
 temperature thresholds and the Open-Meteo forecast API.
 
-Run:  python app.py    then open http://127.0.0.1:5000
+The server holds no state. Thresholds and location live in the browser and
+arrive as query parameters, so this runs unchanged on a read-only serverless
+filesystem.
+
+Run locally:  python app.py    then open http://127.0.0.1:5000
 """
 
-import json
 import time
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import datetime, timedelta
 
 import requests
 from flask import Flask, jsonify, render_template, request
-
-APP_DIR = Path(__file__).resolve().parent
-SETTINGS_PATH = APP_DIR / "settings.json"
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
@@ -24,7 +23,6 @@ DEFAULT_SETTINGS = {
     "rain_probability_pct": 40,
     "day_start_hour": 7,
     "day_end_hour": 21,
-    "location": None,  # {"name": str, "latitude": float, "longitude": float}
 }
 
 CACHE_SECONDS = 600
@@ -35,63 +33,37 @@ app = Flask(__name__)
 
 # ---------------------------------------------------------------- settings
 
-def load_settings():
+LIMITS = {
+    "jacket_f": (-60, 120),
+    "coat_f": (-60, 120),
+    "rain_probability_pct": (0, 100),
+    "day_start_hour": (0, 23),
+    "day_end_hour": (1, 24),
+}
+
+
+def settings_from_args(args):
+    """Read thresholds off the query string, falling back to the defaults.
+
+    Raises ValueError with a message meant to be shown to the person.
+    """
     settings = dict(DEFAULT_SETTINGS)
-    if SETTINGS_PATH.exists():
+    for field, (low, high) in LIMITS.items():
+        if field not in args:
+            continue
         try:
-            settings.update(json.loads(SETTINGS_PATH.read_text()))
-        except (json.JSONDecodeError, OSError):
-            pass
-    return settings
+            value = int(args[field])
+        except (TypeError, ValueError):
+            raise ValueError(f"{field} must be a whole number")
+        if not low <= value <= high:
+            raise ValueError(f"{field} must be between {low} and {high}")
+        settings[field] = value
 
-
-def save_settings(settings):
-    SETTINGS_PATH.write_text(json.dumps(settings, indent=2))
-
-
-def coerce_settings(incoming, current):
-    """Validate a settings payload from the UI. Unknown keys are dropped."""
-    out = dict(current)
-    int_fields = {
-        "jacket_f": (-60, 120),
-        "coat_f": (-60, 120),
-        "rain_probability_pct": (0, 100),
-        "day_start_hour": (0, 23),
-        "day_end_hour": (1, 24),
-    }
-    for field, (low, high) in int_fields.items():
-        if field in incoming:
-            try:
-                value = int(incoming[field])
-            except (TypeError, ValueError):
-                raise ValueError(f"{field} must be a whole number")
-            if not low <= value <= high:
-                raise ValueError(f"{field} must be between {low} and {high}")
-            out[field] = value
-
-    if out["coat_f"] >= out["jacket_f"]:
+    if settings["coat_f"] >= settings["jacket_f"]:
         raise ValueError("Coat temperature must be lower than jacket temperature")
-    if out["day_end_hour"] <= out["day_start_hour"]:
+    if settings["day_end_hour"] <= settings["day_start_hour"]:
         raise ValueError("Day end must be later than day start")
-
-    if "location" in incoming:
-        loc = incoming["location"]
-        if loc is None:
-            out["location"] = None
-        else:
-            try:
-                out["location"] = {
-                    "name": str(loc["name"])[:120],
-                    "latitude": round(float(loc["latitude"]), 4),
-                    "longitude": round(float(loc["longitude"]), 4),
-                }
-            except (KeyError, TypeError, ValueError):
-                raise ValueError("Location needs a name, latitude and longitude")
-            if not -90 <= out["location"]["latitude"] <= 90:
-                raise ValueError("Latitude must be between -90 and 90")
-            if not -180 <= out["location"]["longitude"] <= 180:
-                raise ValueError("Longitude must be between -180 and 180")
-    return out
+    return settings
 
 
 # ---------------------------------------------------------------- forecast
@@ -223,21 +195,6 @@ def index():
     return render_template("index.html")
 
 
-@app.get("/api/settings")
-def get_settings():
-    return jsonify(load_settings())
-
-
-@app.post("/api/settings")
-def post_settings():
-    try:
-        updated = coerce_settings(request.get_json(force=True) or {}, load_settings())
-    except ValueError as err:
-        return jsonify({"error": str(err)}), 400
-    save_settings(updated)
-    return jsonify(updated)
-
-
 @app.get("/api/geocode")
 def geocode():
     query = (request.args.get("q") or "").strip()
@@ -272,21 +229,22 @@ def geocode():
 
 @app.get("/api/forecast")
 def forecast():
-    settings = load_settings()
+    try:
+        settings = settings_from_args(request.args)
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
 
     lat_arg, lon_arg = request.args.get("lat"), request.args.get("lon")
-    if lat_arg and lon_arg:
-        try:
-            lat, lon = float(lat_arg), float(lon_arg)
-        except ValueError:
-            return jsonify({"error": "Latitude and longitude must be numbers"}), 400
-        name = f"{lat:.3f}, {lon:.3f}"
-    elif settings["location"]:
-        lat = settings["location"]["latitude"]
-        lon = settings["location"]["longitude"]
-        name = settings["location"]["name"]
-    else:
+    if not lat_arg or not lon_arg:
         return jsonify({"error": "No location set"}), 409
+    try:
+        lat, lon = float(lat_arg), float(lon_arg)
+    except ValueError:
+        return jsonify({"error": "Latitude and longitude must be numbers"}), 400
+    if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+        return jsonify({"error": "Those coordinates are out of range"}), 400
+
+    name = request.args.get("name") or f"{lat:.3f}, {lon:.3f}"
 
     try:
         payload = fetch_forecast(lat, lon)
@@ -301,7 +259,7 @@ def forecast():
 
     return jsonify(
         {
-            "location": {"name": name, "latitude": lat, "longitude": lon},
+            "location": {"name": name[:120], "latitude": lat, "longitude": lon},
             "timezone": payload.get("timezone"),
             "for_tomorrow": rolled,
             "current": {
