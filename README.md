@@ -1,4 +1,4 @@
-# Layer Up
+# Layers
 
 A local dashboard that tells you whether today calls for a jacket, a coat, or
 rain gear, using thresholds you set yourself.
@@ -9,8 +9,14 @@ rain gear, using thresholds you set yourself.
     python app.py
 
 Open http://127.0.0.1:5000. On first load it asks for a location. Either let the
-browser share your coordinates or search for a place by name. The choice is
-saved to `settings.json` next to `app.py`, so you only do it once.
+browser share your coordinates or search for a place by name.
+
+## Deploying
+
+Runs on Vercel with no configuration. The server keeps no state at all: your
+thresholds and location live in the browser's localStorage and travel as query
+parameters on each forecast request, so nothing is ever written to disk. That
+matters because serverless filesystems are read-only.
 
 ## How the verdict is decided
 
@@ -26,8 +32,8 @@ whatever the temperature already called for.
 
 ## Settings
 
-Everything lives in `settings.json` and is editable in the page under
-"Your thresholds".
+Everything is editable in the page under "Your thresholds" and persists in
+your browser.
 
     jacket_f              jacket at or below this apparent temperature
     coat_f                coat at or below this apparent temperature
@@ -36,7 +42,7 @@ Everything lives in `settings.json` and is editable in the page under
     day_end_hour          hour you are back in (24h, exclusive)
     location              name plus latitude and longitude
 
-`settings.json` holds your coordinates, so it is gitignored.
+Settings are per-browser, so clearing site data resets them.
 
 ## Data source
 
