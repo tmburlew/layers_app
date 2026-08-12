@@ -28,6 +28,10 @@ html[data-layer="coat"] {
 
 * { box-sizing: border-box; }
 
+/* An author display rule beats the browser's built-in [hidden] { display: none },
+   so anything toggled with the hidden attribute needs this to actually hide. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   padding: 40px 24px 80px;
